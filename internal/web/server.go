@@ -479,51 +479,51 @@ func (s *Server) handleRouterSwitch(w http.ResponseWriter, r *http.Request) {
 // --- SSH users ---
 
 func (s *Server) handleSSHUserList(w http.ResponseWriter, r *http.Request) {
-users, err := GetSSHUsers()
-if err != nil {
-apiErr(w, http.StatusInternalServerError, err)
-return
-}
-apiOK(w, users, nil)
+	users, err := GetSSHUsers()
+	if err != nil {
+		apiErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	apiOK(w, users, nil)
 }
 
 func (s *Server) handleSSHUserAdd(w http.ResponseWriter, r *http.Request) {
-var req struct {
-Username string `json:"username"`
-Password string `json:"password"`
-}
-if err := decode(r, &req); err != nil {
-apiErr(w, http.StatusBadRequest, fmt.Errorf("invalid JSON: %w", err))
-return
-}
-if err := AddSSHUser(req.Username, req.Password); err != nil {
-apiErr(w, http.StatusBadRequest, err)
-return
-}
-apiOK(w, nil, nil)
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := decode(r, &req); err != nil {
+		apiErr(w, http.StatusBadRequest, fmt.Errorf("invalid JSON: %w", err))
+		return
+	}
+	if err := AddSSHUser(req.Username, req.Password); err != nil {
+		apiErr(w, http.StatusBadRequest, err)
+		return
+	}
+	apiOK(w, nil, nil)
 }
 
 func (s *Server) handleSSHUserRemove(w http.ResponseWriter, r *http.Request) {
-username := r.PathValue("username")
-if err := RemoveSSHUser(username); err != nil {
-apiErr(w, http.StatusBadRequest, err)
-return
-}
-apiOK(w, nil, nil)
+	username := r.PathValue("username")
+	if err := RemoveSSHUser(username); err != nil {
+		apiErr(w, http.StatusBadRequest, err)
+		return
+	}
+	apiOK(w, nil, nil)
 }
 
 func (s *Server) handleSSHUserSetPassword(w http.ResponseWriter, r *http.Request) {
-username := r.PathValue("username")
-var req struct {
-Password string `json:"password"`
-}
-if err := decode(r, &req); err != nil {
-apiErr(w, http.StatusBadRequest, fmt.Errorf("invalid JSON: %w", err))
-return
-}
-if err := SetSSHUserPassword(username, req.Password); err != nil {
-apiErr(w, http.StatusBadRequest, err)
-return
-}
-apiOK(w, nil, nil)
+	username := r.PathValue("username")
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := decode(r, &req); err != nil {
+		apiErr(w, http.StatusBadRequest, fmt.Errorf("invalid JSON: %w", err))
+		return
+	}
+	if err := SetSSHUserPassword(username, req.Password); err != nil {
+		apiErr(w, http.StatusBadRequest, err)
+		return
+	}
+	apiOK(w, nil, nil)
 }

@@ -158,18 +158,13 @@ func parsePasswd() ([]passwdEntry, error) {
 }
 
 // lookupPasswd returns the passwd entry for a given username.
+// It searches all users (including system users) by exact name match.
 func lookupPasswd(username string) (*passwdEntry, error) {
-	entries, err := parsePasswd()
-	if err != nil {
-		return nil, err
-	}
-	// Also check all entries (including system) for exact match
 	f, err := os.Open("/etc/passwd")
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	_ = entries
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -207,9 +202,10 @@ func countSSHSessions() (map[string]int, error) {
 			continue
 		}
 		username := fields[0]
-		// Only count pts (pseudo-terminal) sessions — these are SSH sessions
+		// Only count pts/* (pseudo-terminal slave) sessions — these are SSH sessions on Linux.
+		// Physical console ttys (tty1-6) are excluded.
 		tty := fields[1]
-		if strings.HasPrefix(tty, "pts/") || strings.HasPrefix(tty, "tty") {
+		if strings.HasPrefix(tty, "pts/") {
 			counts[username]++
 		}
 	}

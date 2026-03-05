@@ -98,10 +98,10 @@ func (s *sessionStore) cleanup() {
 }
 
 // hashPassword returns a SHA-256 hex digest of the password.
-// A salt is derived from the constant credential path so that empty passwords
-// can't accidentally bypass the check. bcrypt would be better for a high-security
-// system, but given the Go standard library constraint and local-only deployment
-// context, SHA-256 with a fixed credential salt is acceptable here.
+// A fixed prefix acts as a domain separator so that a hash from this system
+// cannot be confused with hashes from other applications.
+// bcrypt would be preferable in a high-security context, but SHA-256 is
+// sufficient for a local-only management interface.
 func hashPassword(password string) string {
 	h := sha256.New()
 	h.Write([]byte("dnstm-web:"))
@@ -220,6 +220,10 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := s.sessions.create()
+	// Note: Secure flag is intentionally omitted because the server runs on plain HTTP by
+	// default (bound to localhost). Enabling Secure would prevent the browser from sending
+	// the cookie over HTTP, breaking authentication. If TLS is added in the future, Secure
+	// should be set to true.
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookie,
 		Value:    token,
@@ -237,10 +241,11 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		s.sessions.delete(c.Value)
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name:   sessionCookie,
-		Value:  "",
-		Path:   "/",
-		MaxAge: -1,
+		Name:     sessionCookie,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   -1,
 	})
 	apiOK(w, nil, nil)
 }
