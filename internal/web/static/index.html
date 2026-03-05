@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dnstm – DNS Tunnel Manager</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;--bg2:#161b22;--bg3:#1c2230;--border:#30363d;
+  --text:#e6edf3;--text2:#8b949e;--accent:#58a6ff;--accent2:#388bfd;
+  --green:#3fb950;--red:#f85149;--yellow:#d29922;--purple:#bc8cff;
+  --radius:6px;--shadow:0 8px 24px rgba(0,0,0,.4);
+}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;font-size:14px;min-height:100vh}
+a{color:var(--accent);text-decoration:none}
+
+/* Layout */
+.header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:100}
+.logo{display:flex;align-items:center;gap:10px;font-weight:600;font-size:16px}
+.logo svg{color:var(--accent)}
+.header-actions{display:flex;align-items:center;gap:8px}
+.status-indicator{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text2)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--text2)}
+.dot.running{background:var(--green);box-shadow:0 0 6px var(--green)}
+.dot.stopped{background:var(--red)}
+
+.container{max-width:1200px;margin:0 auto;padding:24px}
+
+/* Tabs */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:24px}
+.tab{padding:8px 16px;border:none;background:none;color:var(--text2);cursor:pointer;font-size:14px;border-bottom:2px solid transparent;transition:all .15s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+/* Cards */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px}
+.card-title{font-size:13px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:16px}
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;margin-bottom:24px}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.stat-label{font-size:12px;color:var(--text2);margin-bottom:4px}
+.stat-value{font-size:22px;font-weight:600}
+.stat-value.green{color:var(--green)}
+.stat-value.red{color:var(--red)}
+.stat-value.accent{color:var(--accent)}
+
+/* Table */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{padding:10px 12px;text-align:left;font-size:12px;color:var(--text2);border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.03)}
+
+/* Badges */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:500}
+.badge.green{background:rgba(63,185,80,.15);color:var(--green)}
+.badge.red{background:rgba(248,81,73,.15);color:var(--red)}
+.badge.yellow{background:rgba(210,153,34,.15);color:var(--yellow)}
+.badge.blue{background:rgba(88,166,255,.15);color:var(--accent)}
+.badge.purple{background:rgba(188,140,255,.15);color:var(--purple)}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:var(--radius);border:1px solid transparent;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;white-space:nowrap}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-primary{background:var(--accent2);color:#fff;border-color:var(--accent2)}
+.btn-primary:hover:not(:disabled){background:var(--accent);border-color:var(--accent)}
+.btn-secondary{background:transparent;color:var(--text);border-color:var(--border)}
+.btn-secondary:hover:not(:disabled){background:var(--bg3);border-color:var(--text2)}
+.btn-danger{background:transparent;color:var(--red);border-color:var(--border)}
+.btn-danger:hover:not(:disabled){background:rgba(248,81,73,.1);border-color:var(--red)}
+.btn-success{background:rgba(63,185,80,.15);color:var(--green);border-color:rgba(63,185,80,.3)}
+.btn-success:hover:not(:disabled){background:rgba(63,185,80,.25)}
+.btn-sm{padding:3px 8px;font-size:12px}
+.btn-group{display:flex;gap:6px;flex-wrap:wrap}
+
+/* Forms */
+.form-group{margin-bottom:16px}
+.form-label{display:block;font-size:13px;color:var(--text2);margin-bottom:6px}
+.form-control{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:8px 10px;font-size:14px;transition:border-color .15s}
+.form-control:focus{outline:none;border-color:var(--accent)}
+.form-control::placeholder{color:var(--text2)}
+select.form-control{cursor:pointer}
+select.form-control option{background:var(--bg2)}
+.form-hint{font-size:12px;color:var(--text2);margin-top:4px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:600px){.form-grid{grid-template-columns:1fr}}
+
+/* Modal */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border);border-radius:10px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow)}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
+.modal-title{font-size:16px;font-weight:600}
+.modal-close{background:none;border:none;color:var(--text2);cursor:pointer;font-size:18px;line-height:1;padding:4px}
+.modal-close:hover{color:var(--text)}
+.modal-body{padding:20px}
+.modal-footer{display:flex;justify-content:flex-end;gap:8px;padding:16px 20px;border-top:1px solid var(--border)}
+
+/* Logs */
+.log-box{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:12px;font-family:"JetBrains Mono","Fira Code",monospace;font-size:12px;line-height:1.6;max-height:500px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;color:var(--text2)}
+.log-box:empty::before{content:"No logs available.";color:var(--text2)}
+
+/* Alerts */
+.alert{padding:10px 14px;border-radius:var(--radius);font-size:13px;margin-bottom:16px;display:flex;align-items:flex-start;gap:8px}
+.alert.success{background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green)}
+.alert.error{background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:var(--red)}
+.alert.info{background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--accent)}
+.alert.warning{background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.3);color:var(--yellow)}
+
+/* Toast */
+.toast-container{position:fixed;bottom:24px;right:24px;z-index:300;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;font-size:13px;box-shadow:var(--shadow);pointer-events:all;opacity:0;transform:translateY(8px);transition:all .25s;max-width:320px}
+.toast.show{opacity:1;transform:none}
+.toast.success{border-left:3px solid var(--green)}
+.toast.error{border-left:3px solid var(--red)}
+.toast.info{border-left:3px solid var(--accent)}
+
+/* Misc */
+.empty{text-align:center;padding:40px 20px;color:var(--text2)}
+.empty-icon{font-size:32px;margin-bottom:12px;opacity:.5}
+.flex{display:flex;align-items:center;gap:8px}
+.flex-wrap{flex-wrap:wrap}
+.spacer{flex:1}
+.tag-pill{font-family:monospace;font-size:12px;background:var(--bg3);padding:2px 6px;border-radius:4px;color:var(--accent)}
+.mono{font-family:monospace;font-size:12px}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.section-title{font-size:16px;font-weight:600}
+.mt4{margin-top:4px}.mt8{margin-top:8px}.mt16{margin-top:16px}
+.text-muted{color:var(--text2)}
+.spinner{width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-overlay{display:none;align-items:center;justify-content:center;padding:24px}
+.loading-overlay.active{display:flex}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="logo">
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+    </svg>
+    dnstm
+  </div>
+  <div class="header-actions">
+    <div class="status-indicator">
+      <span class="dot" id="hdr-dot"></span>
+      <span id="hdr-status">Loading…</span>
+    </div>
+    <button class="btn btn-secondary btn-sm" onclick="loadStatus()">↻ Refresh</button>
+  </div>
+</div>
+
+<!-- Main -->
+<div class="container">
+  <div id="not-initialized" class="alert info" style="display:none">
+    ⚠️ dnstm is not initialized. Run <code>sudo dnstm install</code> first, then refresh this page.
+  </div>
+
+  <div id="app-content">
+    <!-- Status cards -->
+    <div class="cards-grid" id="stat-cards">
+      <div class="stat-card"><div class="stat-label">Mode</div><div class="stat-value accent" id="stat-mode">—</div></div>
+      <div class="stat-card"><div class="stat-label">Tunnels</div><div class="stat-value" id="stat-tunnels">—</div></div>
+      <div class="stat-card"><div class="stat-label">Running</div><div class="stat-value green" id="stat-running">—</div></div>
+      <div class="stat-card"><div class="stat-label">DNS Router</div><div class="stat-value" id="stat-router">—</div></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('tunnels',this)">Tunnels</button>
+      <button class="tab" onclick="showTab('backends',this)">Backends</button>
+      <button class="tab" onclick="showTab('router',this)">Router</button>
+      <button class="tab" onclick="showTab('logs',this)">Logs</button>
+    </div>
+
+    <!-- Tunnels Tab -->
+    <div class="tab-content active" id="tab-tunnels">
+      <div class="section-header">
+        <div class="section-title">Tunnels</div>
+        <button class="btn btn-primary btn-sm" onclick="openModal('add-tunnel-modal')">+ Add Tunnel</button>
+      </div>
+      <div class="card" style="padding:0">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Tag</th>
+                <th>Transport</th>
+                <th>Backend</th>
+                <th>Domain</th>
+                <th>Port</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tunnels-tbody">
+              <tr><td colspan="7"><div class="loading-overlay active"><div class="spinner"></div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Backends Tab -->
+    <div class="tab-content" id="tab-backends">
+      <div class="section-header">
+        <div class="section-title">Backends</div>
+        <button class="btn btn-primary btn-sm" onclick="openModal('add-backend-modal')">+ Add Backend</button>
+      </div>
+      <div class="card" style="padding:0">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Tag</th><th>Type</th><th>Address</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="backends-tbody">
+              <tr><td colspan="4"><div class="loading-overlay active"><div class="spinner"></div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Router Tab -->
+    <div class="tab-content" id="tab-router">
+      <div class="section-title" style="margin-bottom:16px">Router Control</div>
+      <div class="cards-grid">
+        <div class="card">
+          <div class="card-title">Mode</div>
+          <div id="router-mode-display" class="stat-value accent" style="margin-bottom:8px">—</div>
+          <div class="mt8">
+            <div class="form-group">
+              <label class="form-label">Switch Mode</label>
+              <select id="mode-select" class="form-control">
+                <option value="single">Single-tunnel</option>
+                <option value="multi">Multi-tunnel</option>
+              </select>
+            </div>
+            <button class="btn btn-secondary" onclick="setMode()">Apply Mode</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Services</div>
+          <div class="btn-group">
+            <button class="btn btn-success" onclick="routerAction('start')">▶ Start</button>
+            <button class="btn btn-secondary" onclick="routerAction('restart')">↻ Restart</button>
+            <button class="btn btn-danger" onclick="routerAction('stop')">■ Stop</button>
+          </div>
+        </div>
+        <div class="card" id="switch-tunnel-card">
+          <div class="card-title">Active Tunnel <span style="font-size:11px">(single mode only)</span></div>
+          <div class="form-group">
+            <select id="switch-tunnel-select" class="form-control"><option value="">Select tunnel…</option></select>
+          </div>
+          <button class="btn btn-primary" onclick="switchTunnel()">Switch</button>
+        </div>
+      </div>
+      <div id="router-output" class="log-box mt16" style="display:none"></div>
+    </div>
+
+    <!-- Logs Tab -->
+    <div class="tab-content" id="tab-logs">
+      <div class="section-header">
+        <div class="section-title">Logs</div>
+        <div class="flex">
+          <select id="log-source" class="form-control" style="width:200px">
+            <option value="router">DNS Router</option>
+          </select>
+          <button class="btn btn-secondary btn-sm" onclick="loadLogs()">Load</button>
+        </div>
+      </div>
+      <div class="log-box" id="log-content">Select a source and click Load.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toasts"></div>
+
+<!-- Add Tunnel Modal -->
+<div class="overlay" id="add-tunnel-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Add Tunnel</span>
+      <button class="modal-close" onclick="closeModal('add-tunnel-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="add-tunnel-alert"></div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Tag (optional)</label>
+          <input type="text" id="t-tag" class="form-control" placeholder="auto-generated">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Transport *</label>
+          <select id="t-transport" class="form-control" onchange="updateMTUVisibility()">
+            <option value="slipstream">Slipstream</option>
+            <option value="dnstt">DNSTT</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Backend *</label>
+        <select id="t-backend" class="form-control"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Domain *</label>
+        <input type="text" id="t-domain" class="form-control" placeholder="t1.example.com">
+        <div class="form-hint">DNS subdomain pointing to this server</div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Port (optional)</label>
+          <input type="number" id="t-port" class="form-control" placeholder="auto">
+        </div>
+        <div class="form-group" id="mtu-group" style="display:none">
+          <label class="form-label">MTU (DNSTT only)</label>
+          <input type="number" id="t-mtu" class="form-control" value="1232" min="512" max="1400">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('add-tunnel-modal')">Cancel</button>
+      <button class="btn btn-primary" id="add-tunnel-btn" onclick="addTunnel()">Add Tunnel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Backend Modal -->
+<div class="overlay" id="add-backend-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Add Backend</span>
+      <button class="modal-close" onclick="closeModal('add-backend-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="add-backend-alert"></div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Tag (optional)</label>
+          <input type="text" id="b-tag" class="form-control" placeholder="auto-generated">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Type *</label>
+          <select id="b-type" class="form-control" onchange="updateBackendFields()">
+            <option value="socks">SOCKS5 (built-in)</option>
+            <option value="ssh">SSH</option>
+            <option value="shadowsocks">Shadowsocks</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" id="b-address-group" style="display:none">
+        <label class="form-label">Address</label>
+        <input type="text" id="b-address" class="form-control" placeholder="127.0.0.1:8443">
+        <div class="form-hint">TCP address for custom/SSH backends</div>
+      </div>
+      <div id="b-ss-fields" style="display:none">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Password</label>
+            <input type="password" id="b-password" class="form-control" placeholder="auto-generated if empty">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Method</label>
+            <select id="b-method" class="form-control">
+              <option value="aes-256-gcm">aes-256-gcm</option>
+              <option value="chacha20-ietf-poly1305">chacha20-ietf-poly1305</option>
+              <option value="aes-128-gcm">aes-128-gcm</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('add-backend-modal')">Cancel</button>
+      <button class="btn btn-primary" id="add-backend-btn" onclick="addBackend()">Add Backend</button>
+    </div>
+  </div>
+</div>
+
+<!-- Logs Modal -->
+<div class="overlay" id="logs-modal">
+  <div class="modal" style="max-width:800px">
+    <div class="modal-header">
+      <span class="modal-title" id="logs-modal-title">Logs</span>
+      <button class="modal-close" onclick="closeModal('logs-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="log-box" id="logs-modal-content"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Share Modal -->
+<div class="overlay" id="share-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="share-modal-title">Share Tunnel</span>
+      <button class="modal-close" onclick="closeModal('share-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Client Config URL</label>
+        <input type="text" id="share-url" class="form-control mono" readonly>
+      </div>
+      <div class="alert info mt8" style="font-size:12px">
+        Use this URL with the <a href="https://github.com/net2share/dnstc" target="_blank">dnstc</a> client to connect.
+        Note: SSH tunnels require credentials — use the CLI for full share options.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('share-modal')">Close</button>
+      <button class="btn btn-primary" onclick="copyShareUrl()">Copy URL</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+// === State ===
+let state = { tunnels: [], backends: [], mode: 'single', active: '', initialized: false };
+
+// === Init ===
+async function init() {
+  await loadStatus();
+}
+
+// === API helpers ===
+async function apiFetch(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  const data = await r.json();
+  return data;
+}
+
+// === Status ===
+async function loadStatus() {
+  try {
+    const d = await apiFetch('GET', '/api/status');
+    if (!d.success) { showToast('Failed to load status: ' + d.error, 'error'); return; }
+    applyStatus(d.data);
+  } catch(e) { showToast('Connection error: ' + e.message, 'error'); }
+}
+
+function applyStatus(data) {
+  if (!data || !data.initialized) {
+    document.getElementById('not-initialized').style.display = '';
+    document.getElementById('app-content').style.display = 'none';
+    setHeaderStatus(false);
+    return;
+  }
+  document.getElementById('not-initialized').style.display = 'none';
+  document.getElementById('app-content').style.display = '';
+  state = { ...data, tunnels: data.tunnels || [], backends: data.backends || [] };
+
+  // Stat cards
+  const modeName = state.mode === 'multi' ? 'Multi-tunnel' : 'Single-tunnel';
+  document.getElementById('stat-mode').textContent = modeName;
+  document.getElementById('stat-tunnels').textContent = state.tunnels.length;
+  const runCount = state.tunnels.filter(t => t.running).length;
+  document.getElementById('stat-running').textContent = runCount + ' / ' + state.tunnels.length;
+  const routerEl = document.getElementById('stat-router');
+  if (state.router && state.router.running) {
+    routerEl.textContent = 'Running'; routerEl.className = 'stat-value green';
+  } else {
+    routerEl.textContent = 'Stopped'; routerEl.className = 'stat-value red';
+  }
+
+  // Header
+  const anyRunning = runCount > 0 || (state.router && state.router.running);
+  setHeaderStatus(anyRunning, modeName);
+
+  // Router tab
+  document.getElementById('router-mode-display').textContent = modeName;
+  document.getElementById('mode-select').value = state.mode;
+
+  // Switch tunnel select
+  const switchSel = document.getElementById('switch-tunnel-select');
+  switchSel.innerHTML = '<option value="">Select tunnel…</option>';
+  state.tunnels.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t.tag; opt.textContent = t.tag;
+    if (t.tag === state.active) opt.selected = true;
+    switchSel.appendChild(opt);
+  });
+  document.getElementById('switch-tunnel-card').style.display = state.mode === 'single' ? '' : 'none';
+
+  // Render tables
+  renderTunnels();
+  renderBackends();
+
+  // Update log source options
+  const logSrc = document.getElementById('log-source');
+  const existing = new Set(Array.from(logSrc.options).map(o => o.value));
+  if (!existing.has('router')) logSrc.appendChild(new Option('DNS Router', 'router'));
+  state.tunnels.forEach(t => {
+    if (!existing.has(t.tag)) logSrc.appendChild(new Option('Tunnel: ' + t.tag, t.tag));
+  });
+
+  // Update backend dropdown in add-tunnel modal
+  populateBackendDropdown();
+}
+
+function setHeaderStatus(running, modeName) {
+  const dot = document.getElementById('hdr-dot');
+  const status = document.getElementById('hdr-status');
+  dot.className = 'dot ' + (running ? 'running' : 'stopped');
+  status.textContent = running ? (modeName || 'Running') : 'Stopped';
+}
+
+// === Tunnels ===
+function renderTunnels() {
+  const tbody = document.getElementById('tunnels-tbody');
+  if (!state.tunnels.length) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-icon">⚡</div><p>No tunnels configured. Add one to get started.</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = state.tunnels.map(t => {
+    const statusBadge = t.running
+      ? `<span class="badge green">● Running</span>`
+      : t.installed
+        ? `<span class="badge red">○ Stopped</span>`
+        : `<span class="badge yellow">Not installed</span>`;
+    const activeMarker = (state.mode === 'single' && t.is_active) ? ' <span class="badge blue">active</span>' : '';
+    const defaultMarker = (state.mode === 'multi' && t.is_default) ? ' <span class="badge purple">default</span>' : '';
+    const transport = t.transport === 'slipstream' ? 'Slipstream' : 'DNSTT';
+    const startBtn = t.running
+      ? `<button class="btn btn-secondary btn-sm" onclick="tunnelAction('restart','${esc(t.tag)}')">↻</button>`
+      : `<button class="btn btn-success btn-sm" onclick="tunnelAction('start','${esc(t.tag)}')">▶</button>`;
+    return `<tr>
+      <td><span class="tag-pill">${esc(t.tag)}</span>${activeMarker}${defaultMarker}</td>
+      <td>${esc(transport)}</td>
+      <td>${esc(t.backend)}</td>
+      <td class="mono">${esc(t.domain)}</td>
+      <td class="mono">${t.port}</td>
+      <td>${statusBadge}</td>
+      <td><div class="btn-group">
+        ${startBtn}
+        ${t.running ? `<button class="btn btn-danger btn-sm" onclick="tunnelAction('stop','${esc(t.tag)}')">■</button>` : ''}
+        <button class="btn btn-secondary btn-sm" onclick="showTunnelLogs('${esc(t.tag)}')">📋</button>
+        <button class="btn btn-secondary btn-sm" onclick="shareTunnel('${esc(t.tag)}')">🔗</button>
+        <button class="btn btn-danger btn-sm" onclick="removeTunnel('${esc(t.tag)}')">🗑</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+async function tunnelAction(action, tag) {
+  showToast(`${capitalize(action)}ing tunnel ${tag}…`, 'info');
+  const d = await apiFetch('POST', `/api/tunnels/${encodeURIComponent(tag)}/${action}`);
+  if (d.success) {
+    showToast(`Tunnel ${tag} ${action}ed`, 'success');
+    await loadStatus();
+  } else {
+    showToast(`Error: ${d.error}`, 'error');
+  }
+}
+
+async function removeTunnel(tag) {
+  if (!confirm(`Remove tunnel "${tag}"? This will stop and delete the service.`)) return;
+  const d = await apiFetch('DELETE', `/api/tunnels/${encodeURIComponent(tag)}`);
+  if (d.success) { showToast(`Tunnel ${tag} removed`, 'success'); await loadStatus(); }
+  else showToast(`Error: ${d.error}`, 'error');
+}
+
+async function showTunnelLogs(tag) {
+  document.getElementById('logs-modal-title').textContent = `Logs: ${tag}`;
+  document.getElementById('logs-modal-content').textContent = 'Loading…';
+  openModal('logs-modal');
+  const d = await apiFetch('GET', `/api/tunnels/${encodeURIComponent(tag)}/logs`);
+  document.getElementById('logs-modal-content').textContent = d.success ? (d.data || 'No logs.') : `Error: ${d.error}`;
+}
+
+async function shareTunnel(tag) {
+  document.getElementById('share-modal-title').textContent = `Share: ${tag}`;
+  document.getElementById('share-url').value = 'Loading…';
+  openModal('share-modal');
+  const d = await apiFetch('GET', `/api/tunnels/${encodeURIComponent(tag)}/share`);
+  document.getElementById('share-url').value = d.success ? (d.data || '') : ('Error: ' + d.error);
+}
+
+function copyShareUrl() {
+  const url = document.getElementById('share-url').value;
+  navigator.clipboard.writeText(url).then(() => showToast('Copied!', 'success'));
+}
+
+function populateBackendDropdown() {
+  const sel = document.getElementById('t-backend');
+  const cur = sel.value;
+  sel.innerHTML = state.backends.map(b =>
+    `<option value="${esc(b.tag)}">${esc(b.tag)} (${esc(b.type)})</option>`
+  ).join('');
+  if (cur) sel.value = cur;
+}
+
+function updateMTUVisibility() {
+  const transport = document.getElementById('t-transport').value;
+  document.getElementById('mtu-group').style.display = transport === 'dnstt' ? '' : 'none';
+}
+
+async function addTunnel() {
+  const btn = document.getElementById('add-tunnel-btn');
+  const alertEl = document.getElementById('add-tunnel-alert');
+  alertEl.innerHTML = '';
+  const body = {
+    transport: document.getElementById('t-transport').value,
+    backend:   document.getElementById('t-backend').value,
+    domain:    document.getElementById('t-domain').value.trim(),
+    tag:       document.getElementById('t-tag').value.trim(),
+    port:      parseInt(document.getElementById('t-port').value) || 0,
+    mtu:       parseInt(document.getElementById('t-mtu').value) || 1232,
+  };
+  if (!body.transport || !body.backend || !body.domain) {
+    alertEl.innerHTML = `<div class="alert error">Transport, backend, and domain are required.</div>`;
+    return;
+  }
+  btn.disabled = true; btn.textContent = 'Adding…';
+  const d = await apiFetch('POST', '/api/tunnels', body);
+  btn.disabled = false; btn.textContent = 'Add Tunnel';
+  if (d.success) {
+    showToast('Tunnel added!', 'success');
+    closeModal('add-tunnel-modal');
+    document.getElementById('t-tag').value = '';
+    document.getElementById('t-domain').value = '';
+    document.getElementById('t-port').value = '';
+    await loadStatus();
+  } else {
+    alertEl.innerHTML = `<div class="alert error">${esc(d.error)}</div>`;
+    if (d.output && d.output.length) alertEl.innerHTML += `<div class="log-box mt8">${esc(d.output.join('\n'))}</div>`;
+  }
+}
+
+// === Backends ===
+function renderBackends() {
+  const tbody = document.getElementById('backends-tbody');
+  if (!state.backends.length) {
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="empty-icon">⚙️</div><p>No custom backends. Built-in backends (socks, ssh) are always available.</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = state.backends.map(b => {
+    const typeLabel = { socks: 'SOCKS5', ssh: 'SSH', shadowsocks: 'Shadowsocks', custom: 'Custom' }[b.type] || b.type;
+    const builtIn = b.type === 'socks' || b.type === 'ssh';
+    return `<tr>
+      <td><span class="tag-pill">${esc(b.tag)}</span>${builtIn ? ' <span class="badge blue">built-in</span>' : ''}</td>
+      <td>${typeLabel}</td>
+      <td class="mono text-muted">${esc(b.address || '—')}</td>
+      <td>${builtIn ? '' : `<button class="btn btn-danger btn-sm" onclick="removeBackend('${esc(b.tag)}')">🗑 Remove</button>`}</td>
+    </tr>`;
+  }).join('');
+}
+
+function updateBackendFields() {
+  const type = document.getElementById('b-type').value;
+  document.getElementById('b-address-group').style.display = (type === 'custom' || type === 'ssh') ? '' : 'none';
+  document.getElementById('b-ss-fields').style.display = type === 'shadowsocks' ? '' : 'none';
+}
+
+async function addBackend() {
+  const btn = document.getElementById('add-backend-btn');
+  const alertEl = document.getElementById('add-backend-alert');
+  alertEl.innerHTML = '';
+  const body = {
+    tag:      document.getElementById('b-tag').value.trim(),
+    type:     document.getElementById('b-type').value,
+    address:  document.getElementById('b-address').value.trim(),
+    password: document.getElementById('b-password').value,
+    method:   document.getElementById('b-method').value,
+  };
+  btn.disabled = true; btn.textContent = 'Adding…';
+  const d = await apiFetch('POST', '/api/backends', body);
+  btn.disabled = false; btn.textContent = 'Add Backend';
+  if (d.success) {
+    showToast('Backend added!', 'success');
+    closeModal('add-backend-modal');
+    document.getElementById('b-tag').value = '';
+    document.getElementById('b-address').value = '';
+    document.getElementById('b-password').value = '';
+    await loadStatus();
+  } else {
+    alertEl.innerHTML = `<div class="alert error">${esc(d.error)}</div>`;
+  }
+}
+
+async function removeBackend(tag) {
+  if (!confirm(`Remove backend "${tag}"?`)) return;
+  const d = await apiFetch('DELETE', `/api/backends/${encodeURIComponent(tag)}`);
+  if (d.success) { showToast(`Backend ${tag} removed`, 'success'); await loadStatus(); }
+  else showToast(`Error: ${d.error}`, 'error');
+}
+
+// === Router ===
+async function routerAction(action) {
+  const out = document.getElementById('router-output');
+  out.style.display = ''; out.textContent = `${capitalize(action)}ing…`;
+  const d = await apiFetch('POST', `/api/router/${action}`);
+  if (d.success) {
+    out.textContent = (d.output || []).join('\n') || 'Done.';
+    showToast(`Router ${action}ed`, 'success');
+    await loadStatus();
+  } else {
+    out.textContent = d.error;
+    showToast(`Error: ${d.error}`, 'error');
+  }
+}
+
+async function setMode() {
+  const mode = document.getElementById('mode-select').value;
+  const out = document.getElementById('router-output');
+  out.style.display = ''; out.textContent = 'Switching mode…';
+  const d = await apiFetch('POST', '/api/router/mode', { mode });
+  if (d.success) {
+    out.textContent = (d.output || []).join('\n') || 'Done.';
+    showToast(`Mode set to ${mode}`, 'success');
+    await loadStatus();
+  } else {
+    out.textContent = d.error;
+    showToast(`Error: ${d.error}`, 'error');
+  }
+}
+
+async function switchTunnel() {
+  const tag = document.getElementById('switch-tunnel-select').value;
+  if (!tag) { showToast('Select a tunnel first', 'error'); return; }
+  const out = document.getElementById('router-output');
+  out.style.display = ''; out.textContent = `Switching to ${tag}…`;
+  const d = await apiFetch('POST', '/api/router/switch', { tag });
+  if (d.success) {
+    out.textContent = (d.output || []).join('\n') || 'Done.';
+    showToast(`Switched to ${tag}`, 'success');
+    await loadStatus();
+  } else {
+    out.textContent = d.error;
+    showToast(`Error: ${d.error}`, 'error');
+  }
+}
+
+// === Logs ===
+async function loadLogs() {
+  const src = document.getElementById('log-source').value;
+  const el = document.getElementById('log-content');
+  el.textContent = 'Loading…';
+  let d;
+  if (src === 'router') {
+    d = await apiFetch('GET', '/api/router/logs');
+  } else {
+    d = await apiFetch('GET', `/api/tunnels/${encodeURIComponent(src)}/logs`);
+  }
+  el.textContent = d.success ? (d.data || 'No logs available.') : `Error: ${d.error}`;
+}
+
+// === UI helpers ===
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// Close modal on overlay click
+document.querySelectorAll('.overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+});
+
+function showToast(msg, type = 'info') {
+  const container = document.getElementById('toasts');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  container.appendChild(t);
+  requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('show')));
+  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 3500);
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+// Keyboard: Esc closes modals
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('.overlay.open').forEach(el => el.classList.remove('open'));
+});
+
+// Auto-refresh every 30 seconds
+setInterval(loadStatus, 30000);
+
+init();
+</script>
+</body>
+</html>
