@@ -88,8 +88,11 @@ func (b *BufferedOutput) Box(title string, lines []string) {
 	b.append("==================")
 }
 
+// KV formats a key-value pair, appends it to the buffer, and returns the formatted string.
 func (b *BufferedOutput) KV(key, value string) string {
-	return fmt.Sprintf("%-20s %s", key+":", value)
+	line := fmt.Sprintf("%-20s %s", key+":", value)
+	b.append(line)
+	return line
 }
 
 func (b *BufferedOutput) Table(headers []string, rows [][]string) {

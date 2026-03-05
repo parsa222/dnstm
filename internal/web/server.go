@@ -80,8 +80,12 @@ func apiOK(w http.ResponseWriter, data interface{}, output []string) {
 	writeJSON(w, http.StatusOK, apiResponse{Success: true, Data: data, Output: output})
 }
 
-func apiErr(w http.ResponseWriter, status int, err error) {
-	writeJSON(w, status, apiResponse{Success: false, Error: err.Error()})
+func apiErr(w http.ResponseWriter, status int, err error, output ...[]string) {
+	resp := apiResponse{Success: false, Error: err.Error()}
+	if len(output) > 0 {
+		resp.Output = output[0]
+	}
+	writeJSON(w, status, resp)
 }
 
 // newCtx builds an actions.Context for non-interactive (web) use.
@@ -243,7 +247,7 @@ func (s *Server) handleTunnelAdd(w http.ResponseWriter, r *http.Request) {
 	ctx := newCtx(values)
 
 	if err := handlers.HandleTunnelAdd(ctx); err != nil {
-		apiErr(w, http.StatusBadRequest, err)
+		apiErr(w, http.StatusBadRequest, err, outputLines(ctx))
 		return
 	}
 	apiOK(w, nil, outputLines(ctx))
@@ -408,7 +412,8 @@ func (s *Server) handleRouterStop(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRouterRestart(w http.ResponseWriter, r *http.Request) {
-	// HandleRouterStart already does a restart if running
+	// HandleRouterStart always calls r.Restart() internally, making it an idempotent
+	// start-or-restart. We reuse it here for the explicit restart endpoint.
 	ctx := newCtx(nil)
 	if err := handlers.HandleRouterStart(ctx); err != nil {
 		apiErr(w, http.StatusBadRequest, err)
