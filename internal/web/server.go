@@ -16,20 +16,29 @@ import (
 
 // Server is the dnstm web GUI server.
 type Server struct {
-	addr string
+	addr     string
+	sessions *sessionStore
 }
 
 // New creates a new web server bound to the given address.
 func New(addr string) *Server {
-	return &Server{addr: addr}
+	return &Server{
+		addr:     addr,
+		sessions: newSessionStore(),
+	}
 }
 
 // Run starts the HTTP server and blocks until it stops.
 func (s *Server) Run() error {
 	mux := http.NewServeMux()
 
-	// Static files
+	// Static files & login page
 	mux.HandleFunc("/", handleIndex)
+
+	// Auth endpoints (public)
+	mux.HandleFunc("GET /api/auth/status", s.handleAuthStatus)
+	mux.HandleFunc("POST /api/auth/login", s.handleLogin)
+	mux.HandleFunc("POST /api/auth/logout", s.handleLogout)
 
 	// Status
 	mux.HandleFunc("GET /api/status", s.handleStatus)
@@ -57,8 +66,21 @@ func (s *Server) Run() error {
 	mux.HandleFunc("POST /api/router/mode", s.handleRouterMode)
 	mux.HandleFunc("POST /api/router/switch", s.handleRouterSwitch)
 
+	// SSH Users (management section)
+	mux.HandleFunc("GET /api/ssh-users", s.handleSSHUserList)
+	mux.HandleFunc("POST /api/ssh-users", s.handleSSHUserAdd)
+	mux.HandleFunc("DELETE /api/ssh-users/{username}", s.handleSSHUserRemove)
+	mux.HandleFunc("PUT /api/ssh-users/{username}/password", s.handleSSHUserSetPassword)
+
+	handler := s.authMiddleware(mux)
+
+	if !CredentialsConfigured() {
+		fmt.Println("⚠️  Web UI password not set. Run: sudo dnstm web --set-password <password>")
+		fmt.Println("   Until a password is set, the web UI is accessible without authentication.")
+	}
+
 	fmt.Printf("Web GUI listening on http://%s\n", s.addr)
-	return http.ListenAndServe(s.addr, mux)
+	return http.ListenAndServe(s.addr, handler)
 }
 
 // --- helpers ---
@@ -452,4 +474,56 @@ func (s *Server) handleRouterSwitch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	apiOK(w, nil, outputLines(ctx))
+}
+
+// --- SSH users ---
+
+func (s *Server) handleSSHUserList(w http.ResponseWriter, r *http.Request) {
+users, err := GetSSHUsers()
+if err != nil {
+apiErr(w, http.StatusInternalServerError, err)
+return
+}
+apiOK(w, users, nil)
+}
+
+func (s *Server) handleSSHUserAdd(w http.ResponseWriter, r *http.Request) {
+var req struct {
+Username string `json:"username"`
+Password string `json:"password"`
+}
+if err := decode(r, &req); err != nil {
+apiErr(w, http.StatusBadRequest, fmt.Errorf("invalid JSON: %w", err))
+return
+}
+if err := AddSSHUser(req.Username, req.Password); err != nil {
+apiErr(w, http.StatusBadRequest, err)
+return
+}
+apiOK(w, nil, nil)
+}
+
+func (s *Server) handleSSHUserRemove(w http.ResponseWriter, r *http.Request) {
+username := r.PathValue("username")
+if err := RemoveSSHUser(username); err != nil {
+apiErr(w, http.StatusBadRequest, err)
+return
+}
+apiOK(w, nil, nil)
+}
+
+func (s *Server) handleSSHUserSetPassword(w http.ResponseWriter, r *http.Request) {
+username := r.PathValue("username")
+var req struct {
+Password string `json:"password"`
+}
+if err := decode(r, &req); err != nil {
+apiErr(w, http.StatusBadRequest, fmt.Errorf("invalid JSON: %w", err))
+return
+}
+if err := SetSSHUserPassword(username, req.Password); err != nil {
+apiErr(w, http.StatusBadRequest, err)
+return
+}
+apiOK(w, nil, nil)
 }

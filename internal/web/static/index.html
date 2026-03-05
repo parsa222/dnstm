@@ -134,9 +134,39 @@ select.form-control option{background:var(--bg2)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .loading-overlay{display:none;align-items:center;justify-content:center;padding:24px}
 .loading-overlay.active{display:flex}
+/* Login page */
+.login-page{display:none;position:fixed;inset:0;background:var(--bg);z-index:500;align-items:center;justify-content:center;flex-direction:column;gap:24px}
+.login-page.active{display:flex}
+.login-box{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:32px;width:100%;max-width:380px;box-shadow:var(--shadow)}
+.login-logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:20px;color:var(--text);margin-bottom:24px;justify-content:center}
+.login-logo svg{color:var(--accent)}
+/* Pass-change modal trigger */
+.btn-logout{background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:var(--radius);padding:4px 10px;font-size:12px;cursor:pointer;transition:all .15s}
+.btn-logout:hover{color:var(--red);border-color:var(--red)}
 </style>
 </head>
 <body>
+
+<!-- Login Page -->
+<div class="login-page" id="login-page">
+  <div class="login-box">
+    <div class="login-logo">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+      </svg>
+      dnstm
+    </div>
+    <div id="login-alert"></div>
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <input type="password" id="login-password" class="form-control" placeholder="Enter admin password" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="doLogin()" id="login-btn">Sign in</button>
+    <div class="mt16" style="font-size:12px;color:var(--text2);text-align:center">
+      Set password with: <code>sudo dnstm web --set-password &lt;password&gt;</code>
+    </div>
+  </div>
+</div>
 
 <!-- Header -->
 <div class="header">
@@ -152,6 +182,7 @@ select.form-control option{background:var(--bg2)}
       <span id="hdr-status">Loading…</span>
     </div>
     <button class="btn btn-secondary btn-sm" onclick="loadStatus()">↻ Refresh</button>
+    <button class="btn-logout" id="logout-btn" onclick="doLogout()" style="display:none">Sign out</button>
   </div>
 </div>
 
@@ -176,6 +207,7 @@ select.form-control option{background:var(--bg2)}
       <button class="tab" onclick="showTab('backends',this)">Backends</button>
       <button class="tab" onclick="showTab('router',this)">Router</button>
       <button class="tab" onclick="showTab('logs',this)">Logs</button>
+      <button class="tab" onclick="showTab('users',this)">SSH Users</button>
     </div>
 
     <!-- Tunnels Tab -->
@@ -276,11 +308,89 @@ select.form-control option{background:var(--bg2)}
       </div>
       <div class="log-box" id="log-content">Select a source and click Load.</div>
     </div>
+
+    <!-- SSH Users Tab -->
+    <div class="tab-content" id="tab-users">
+      <div class="section-header">
+        <div class="section-title">SSH Users</div>
+        <div class="flex">
+          <button class="btn btn-secondary btn-sm" onclick="loadSSHUsers()">↻ Refresh</button>
+          <button class="btn btn-primary btn-sm" onclick="openModal('add-user-modal')">+ Add User</button>
+        </div>
+      </div>
+      <div class="alert info" style="font-size:13px;margin-bottom:16px">
+        These are system users available for SSH-mode slipstream tunnel sharing.
+        Use <code>dnstm tunnel share</code> to generate client config URLs for each user.
+      </div>
+      <div class="card" style="padding:0">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>UID</th>
+                <th>Active Connections</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody">
+              <tr><td colspan="4"><div class="empty"><div class="empty-icon">👤</div><p>Click Refresh to load SSH users.</p></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
 <!-- Toast Container -->
 <div class="toast-container" id="toasts"></div>
+
+<!-- Add SSH User Modal -->
+<div class="overlay" id="add-user-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Add SSH User</span>
+      <button class="modal-close" onclick="closeModal('add-user-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="add-user-alert"></div>
+      <div class="form-group">
+        <label class="form-label">Username *</label>
+        <input type="text" id="u-username" class="form-control" placeholder="alice">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password *</label>
+        <input type="password" id="u-password" class="form-control" placeholder="Initial SSH password">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('add-user-modal')">Cancel</button>
+      <button class="btn btn-primary" id="add-user-btn" onclick="addSSHUser()">Add User</button>
+    </div>
+  </div>
+</div>
+
+<!-- Set Password Modal -->
+<div class="overlay" id="set-password-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Set Password for <span id="set-pw-username"></span></span>
+      <button class="modal-close" onclick="closeModal('set-password-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="set-pw-alert"></div>
+      <div class="form-group">
+        <label class="form-label">New Password *</label>
+        <input type="password" id="set-pw-value" class="form-control" placeholder="New SSH password">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('set-password-modal')">Cancel</button>
+      <button class="btn btn-primary" id="set-pw-btn" onclick="setSSHUserPassword()">Set Password</button>
+    </div>
+  </div>
+</div>
 
 <!-- Add Tunnel Modal -->
 <div class="overlay" id="add-tunnel-modal">
@@ -428,7 +538,59 @@ let state = { tunnels: [], backends: [], mode: 'single', active: '', initialized
 
 // === Init ===
 async function init() {
-  await loadStatus();
+  await checkAuth();
+}
+
+// === Auth ===
+async function checkAuth() {
+  try {
+    const d = await apiFetch('GET', '/api/auth/status');
+    if (!d.success) { showLoginPage(); return; }
+    const { authenticated, configured } = d.data;
+    if (!configured || authenticated) {
+      // No password set (open access) or already logged in
+      hideLoginPage();
+      document.getElementById('logout-btn').style.display = configured ? '' : 'none';
+      await loadStatus();
+    } else {
+      showLoginPage();
+    }
+  } catch(e) {
+    showLoginPage();
+  }
+}
+
+function showLoginPage() {
+  document.getElementById('login-page').classList.add('active');
+  setTimeout(() => document.getElementById('login-password').focus(), 50);
+}
+
+function hideLoginPage() {
+  document.getElementById('login-page').classList.remove('active');
+}
+
+async function doLogin() {
+  const btn = document.getElementById('login-btn');
+  const alertEl = document.getElementById('login-alert');
+  const password = document.getElementById('login-password').value;
+  alertEl.innerHTML = '';
+  btn.disabled = true; btn.textContent = 'Signing in…';
+  const d = await apiFetch('POST', '/api/auth/login', { password });
+  btn.disabled = false; btn.textContent = 'Sign in';
+  if (d.success) {
+    hideLoginPage();
+    document.getElementById('logout-btn').style.display = '';
+    document.getElementById('login-password').value = '';
+    await loadStatus();
+  } else {
+    alertEl.innerHTML = `<div class="alert error" style="margin-bottom:12px">Invalid password.</div>`;
+  }
+}
+
+async function doLogout() {
+  await apiFetch('POST', '/api/auth/logout');
+  document.getElementById('logout-btn').style.display = 'none';
+  showLoginPage();
 }
 
 // === API helpers ===
@@ -436,6 +598,10 @@ async function apiFetch(method, path, body) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch(path, opts);
+  if (r.status === 401) {
+    showLoginPage();
+    return { success: false, error: 'not authenticated' };
+  }
   const data = await r.json();
   return data;
 }
@@ -693,6 +859,103 @@ async function removeBackend(tag) {
   const d = await apiFetch('DELETE', `/api/backends/${encodeURIComponent(tag)}`);
   if (d.success) { showToast(`Backend ${tag} removed`, 'success'); await loadStatus(); }
   else showToast(`Error: ${d.error}`, 'error');
+}
+
+// === SSH Users ===
+async function loadSSHUsers() {
+  const tbody = document.getElementById('users-tbody');
+  tbody.innerHTML = `<tr><td colspan="4"><div class="loading-overlay active"><div class="spinner"></div></div></td></tr>`;
+  const d = await apiFetch('GET', '/api/ssh-users');
+  if (!d.success) {
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="empty-icon">⚠️</div><p>${esc(d.error)}</p></div></td></tr>`;
+    return;
+  }
+  renderSSHUsers(d.data || []);
+}
+
+function renderSSHUsers(users) {
+  const tbody = document.getElementById('users-tbody');
+  if (!users || !users.length) {
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="empty-icon">👤</div><p>No SSH users found. Add a user to enable SSH-mode sharing.</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = users.map(u => {
+    const connBadge = u.connections > 0
+      ? `<span class="badge green">● ${u.connections} connected</span>`
+      : `<span class="badge" style="background:rgba(139,148,158,.1);color:var(--text2)">disconnected</span>`;
+    return `<tr>
+      <td><span class="tag-pill">${esc(u.username)}</span></td>
+      <td class="mono text-muted">${u.uid}</td>
+      <td>${connBadge}</td>
+      <td>
+        <div class="btn-group">
+          <button class="btn btn-secondary btn-sm" onclick="openSetPassword('${esc(u.username)}')">🔑 Set Password</button>
+          <button class="btn btn-danger btn-sm" onclick="removeSSHUser('${esc(u.username)}')">🗑 Remove</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function addSSHUser() {
+  const btn = document.getElementById('add-user-btn');
+  const alertEl = document.getElementById('add-user-alert');
+  alertEl.innerHTML = '';
+  const body = {
+    username: document.getElementById('u-username').value.trim(),
+    password: document.getElementById('u-password').value,
+  };
+  if (!body.username || !body.password) {
+    alertEl.innerHTML = `<div class="alert error">Username and password are required.</div>`;
+    return;
+  }
+  btn.disabled = true; btn.textContent = 'Adding…';
+  const d = await apiFetch('POST', '/api/ssh-users', body);
+  btn.disabled = false; btn.textContent = 'Add User';
+  if (d.success) {
+    showToast(`User ${body.username} added!`, 'success');
+    closeModal('add-user-modal');
+    document.getElementById('u-username').value = '';
+    document.getElementById('u-password').value = '';
+    await loadSSHUsers();
+  } else {
+    alertEl.innerHTML = `<div class="alert error">${esc(d.error)}</div>`;
+  }
+}
+
+async function removeSSHUser(username) {
+  if (!confirm(`Remove user "${username}" and their home directory?`)) return;
+  const d = await apiFetch('DELETE', `/api/ssh-users/${encodeURIComponent(username)}`);
+  if (d.success) { showToast(`User ${username} removed`, 'success'); await loadSSHUsers(); }
+  else showToast(`Error: ${d.error}`, 'error');
+}
+
+function openSetPassword(username) {
+  document.getElementById('set-pw-username').textContent = username;
+  document.getElementById('set-pw-value').value = '';
+  document.getElementById('set-pw-alert').innerHTML = '';
+  openModal('set-password-modal');
+}
+
+async function setSSHUserPassword() {
+  const btn = document.getElementById('set-pw-btn');
+  const alertEl = document.getElementById('set-pw-alert');
+  alertEl.innerHTML = '';
+  const username = document.getElementById('set-pw-username').textContent;
+  const password = document.getElementById('set-pw-value').value;
+  if (!password) {
+    alertEl.innerHTML = `<div class="alert error">Password is required.</div>`;
+    return;
+  }
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const d = await apiFetch('PUT', `/api/ssh-users/${encodeURIComponent(username)}/password`, { password });
+  btn.disabled = false; btn.textContent = 'Set Password';
+  if (d.success) {
+    showToast(`Password updated for ${username}`, 'success');
+    closeModal('set-password-modal');
+  } else {
+    alertEl.innerHTML = `<div class="alert error">${esc(d.error)}</div>`;
+  }
 }
 
 // === Router ===
